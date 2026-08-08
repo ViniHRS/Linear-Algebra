@@ -6,6 +6,7 @@
 #include <glad/glad.h>
 #include <KHR/khrplatform.h>
 #include <GLFW/glfw3.h>
+#include <cglm/cglm.h>
 #include <stdio.h>
 
 int main() {
@@ -31,14 +32,17 @@ int main() {
       glfwTerminate();
       return -1;
    }
+   glEnable(GL_DEPTH_TEST);
 
    //Leitura de vertexShaderSource e fragmentShaderSource   
    const char* vertexShaderSource =
       "#version 330 core\n"
       "layout (location = 0) in vec3 aPos;\n"
+      "uniform mat4 view;\n"
+      "uniform mat4 projection;\n"
       "void main()\n"
       "{\n"
-      "    gl_Position = vec4(aPos, 1.0);\n"
+      "    gl_Position = projection * view * vec4(aPos, 1.0);\n"
       "}\n";
 
    const char* fragmentShaderSource =
@@ -73,6 +77,28 @@ int main() {
 
    glDeleteShader(vertexShader);
    glDeleteShader(fragmentShader);
+
+   //Obtendo a localização das matrizes no shader
+   int viewLoc = glGetUniformLocation(shaderProgram, "view");
+   int projectionLoc = glGetUniformLocation(shaderProgram, "projection");
+
+   //Configuração da câmera
+   mat4 view;
+   mat4 projection;
+
+   vec3 cameraPos = {3.0f, 3.0f, 3.0f};
+   vec3 cameraTarget = {0.0f, 0.0f, 0.0f};
+   vec3 cameraUp = {0.0f, 1.0f, 0.0f};
+
+   glm_lookat(cameraPos, cameraTarget, cameraUp, view);
+
+   glm_perspective(
+      glm_rad(45.0f),   // Campo de visão
+      1000.0f / 600.0f, // Proporção da tela
+      0.1f,             // Distância mínima
+      100.0f,           // Distância máxima
+      projection        // Matriz resultante
+   );
 
    //Criação dos eixos
    float vertices[] = {
@@ -117,12 +143,19 @@ int main() {
 
    glEnableVertexAttribArray(0);
 
+   //Enviando matrizes para o shader
+   glUseProgram(shaderProgram);
+
+   glUniformMatrix4fv(viewLoc, 1, GL_FALSE, (float*)view);
+
+   glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, (float*)projection);
+
    //Laço de abertura da janela
    while (!glfwWindowShouldClose(window)) {
       glfwPollEvents();
 
       glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
-      glClear(GL_COLOR_BUFFER_BIT);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
       glUseProgram(shaderProgram);
 
