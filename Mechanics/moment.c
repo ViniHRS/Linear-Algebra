@@ -8,6 +8,20 @@
 #include <GLFW/glfw3.h>
 #include <cglm/cglm.h>
 #include <stdio.h>
+#include <math.h>
+
+//Criando um struct para vetores
+typedef struct {
+   float x;
+   float y;
+   float z;
+} Vec3;
+
+//Protótipos de função
+Vec3 vec3_add(Vec3 a, Vec3 b);
+Vec3 vec3_scale(Vec3 v, float scalar);
+float vec3_length(Vec3 v);
+Vec3 vec3_normalize(Vec3 v);
 
 int main() {
    if (!glfwInit()) {
@@ -50,7 +64,7 @@ int main() {
       "out vec4 FragColor;\n"
       "void main()\n"
       "{\n"
-      "    FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n"
+      "    FragColor = vec4(0.0, 0.0, 0.0, 1.0);\n"
       "}\n";
 
    //Criando e compilando vertexShader
@@ -100,6 +114,17 @@ int main() {
       projection        // Matriz resultante
    );
 
+   //Criando o ponto P a força F (valores de teste)
+   Vec3 P = {0.5f, 1.5f, 1.0f};
+   Vec3 F = {1.0f, 0.2f, 0.7f};
+
+   //Obtendo o versor de F
+   Vec3 F_direction = vec3_normalize(F);
+
+   //Criando os pontos de ação
+   Vec3 A = vec3_add(P, vec3_scale(F_direction, -2.0f));
+   Vec3 B = vec3_add(P, vec3_scale(F_direction,  2.0f));
+
    //Criação dos eixos
    float vertices[] = {
       // X
@@ -112,7 +137,11 @@ int main() {
 
       // Z
       0.0f, 0.0f, -0.8f,
-      0.0f, 0.0f,  0.8f
+      0.0f, 0.0f,  0.8f,
+
+      // Linha de ação
+      A.x, A.y, A.z,
+      B.x, B.y, B.z
    };
 
    //Criando o VBO
@@ -154,14 +183,14 @@ int main() {
    while (!glfwWindowShouldClose(window)) {
       glfwPollEvents();
 
-      glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+      glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
       glUseProgram(shaderProgram);
 
       glBindVertexArray(VAO);
 
-      glDrawArrays(GL_LINES, 0, 6);
+      glDrawArrays(GL_LINES, 0, 8);
 
       glfwSwapBuffers(window);
    }
@@ -170,4 +199,41 @@ int main() {
    glfwDestroyWindow(window);
    glfwTerminate();
    return 0;
+}
+
+//Funções
+Vec3 vec3_add(Vec3 a, Vec3 b) {
+   Vec3 result = {
+      a.x + b.x,
+      a.y + b.y,
+      a.z + b.z
+   };
+
+   return result;
+}
+
+Vec3 vec3_scale(Vec3 v, float scalar) {
+   Vec3 result = {
+      v.x * scalar,
+      v.y * scalar,
+      v.z * scalar
+   };
+
+   return result;
+}
+
+float vec3_length(Vec3 v) {
+   return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+Vec3 vec3_normalize(Vec3 v) {
+   float length = vec3_length(v);
+
+   Vec3 result = {
+        v.x / length,
+        v.y / length,
+        v.z / length
+   };
+
+   return result;
 }
