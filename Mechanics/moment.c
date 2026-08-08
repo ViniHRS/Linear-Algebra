@@ -22,6 +22,7 @@ Vec3 vec3_add(Vec3 a, Vec3 b);
 Vec3 vec3_scale(Vec3 v, float scalar);
 float vec3_length(Vec3 v);
 Vec3 vec3_normalize(Vec3 v);
+Vec3 vec3_cross(Vec3 a, Vec3 b);
 
 int main() {
    if (!glfwInit()) {
@@ -30,7 +31,7 @@ int main() {
    }
 
    //Criando a janela
-   GLFWwindow* window = glfwCreateWindow(1000, 600, "Campo de Momentos de uma Força", NULL, NULL);
+   GLFWwindow* window = glfwCreateWindow(1200, 800, "Campo de Momentos de uma Força", NULL, NULL);
    if (!window) {
       fprintf(stderr, "Falha ao criar a janela\n");
       glfwTerminate();
@@ -61,10 +62,11 @@ int main() {
 
    const char* fragmentShaderSource =
       "#version 330 core\n"
+      "uniform vec3 color;\n"
       "out vec4 FragColor;\n"
       "void main()\n"
       "{\n"
-      "    FragColor = vec4(0.0, 0.0, 0.0, 1.0);\n"
+      "    FragColor = vec4(color, 1.0);\n"
       "}\n";
 
    //Criando e compilando vertexShader
@@ -92,15 +94,16 @@ int main() {
    glDeleteShader(vertexShader);
    glDeleteShader(fragmentShader);
 
-   //Obtendo a localização das matrizes no shader
+   //Obtendo a localização das matrizes no shader e de color
    int viewLoc = glGetUniformLocation(shaderProgram, "view");
    int projectionLoc = glGetUniformLocation(shaderProgram, "projection");
+   int colorLoc = glGetUniformLocation(shaderProgram, "color");
 
    //Configuração da câmera
    mat4 view;
    mat4 projection;
 
-   vec3 cameraPos = {3.0f, 3.0f, 3.0f};
+   vec3 cameraPos = {5.0f, 5.0f, 5.0f};
    vec3 cameraTarget = {0.0f, 0.0f, 0.0f};
    vec3 cameraUp = {0.0f, 1.0f, 0.0f};
 
@@ -108,7 +111,7 @@ int main() {
 
    glm_perspective(
       glm_rad(45.0f),   // Campo de visão
-      1000.0f / 600.0f, // Proporção da tela
+      1200.0f / 800.0f, // Proporção da tela
       0.1f,             // Distância mínima
       100.0f,           // Distância máxima
       projection        // Matriz resultante
@@ -121,27 +124,53 @@ int main() {
    //Obtendo o versor de F
    Vec3 F_direction = vec3_normalize(F);
 
+   Vec3 reference = {0.0f, 1.0f, 0.0f};
+   Vec3 arrowSide = vec3_normalize(vec3_cross(F_direction, reference));
+
+   float forceLength = 0.8f;
+   float arrowLength = 0.10f;
+   float arrowWidth = 0.02f;
+   
+   Vec3 F_end = vec3_add(P, vec3_scale(F_direction, forceLength));
+   Vec3 arrowBase = vec3_add(F_end, vec3_scale(F_direction, -arrowLength));
+
+   Vec3 arrowLeft = vec3_add(arrowBase, vec3_scale(arrowSide, arrowWidth));
+   Vec3 arrowRight = vec3_add(arrowBase, vec3_scale(arrowSide, -arrowWidth));
+
    //Criando os pontos de ação
-   Vec3 A = vec3_add(P, vec3_scale(F_direction, -2.0f));
-   Vec3 B = vec3_add(P, vec3_scale(F_direction,  2.0f));
+   float actionLenght = 4.0f;
+   Vec3 A = vec3_add(P, vec3_scale(F_direction, -actionLenght));
+   Vec3 B = vec3_add(P, vec3_scale(F_direction,  actionLenght));
 
    //Criação dos eixos
+   float axisLenght = 2.0f;
    float vertices[] = {
       // X
-      -0.8f, 0.0f, 0.0f,
-      0.8f, 0.0f, 0.0f,
+      -axisLenght, 0.0f, 0.0f,
+      axisLenght, 0.0f, 0.0f,
 
       // Y
-      0.0f, -0.8f, 0.0f,
-      0.0f,  0.8f, 0.0f,
+      0.0f, -axisLenght, 0.0f,
+      0.0f,  axisLenght, 0.0f,
 
       // Z
-      0.0f, 0.0f, -0.8f,
-      0.0f, 0.0f,  0.8f,
+      0.0f, 0.0f, -axisLenght,
+      0.0f, 0.0f,  axisLenght,
 
       // Linha de ação
       A.x, A.y, A.z,
-      B.x, B.y, B.z
+      B.x, B.y, B.z,
+
+      // Força
+      P.x, P.y, P.z,
+      F_end.x, F_end.y, F_end.z,
+
+      // Ponta da força
+      F_end.x, F_end.y, F_end.z,
+      arrowLeft.x, arrowLeft.y, arrowLeft.z,
+
+      F_end.x, F_end.y, F_end.z,
+      arrowRight.x, arrowRight.y, arrowRight.z
    };
 
    //Criando o VBO
@@ -190,7 +219,24 @@ int main() {
 
       glBindVertexArray(VAO);
 
-      glDrawArrays(GL_LINES, 0, 8);
+      //Elementos pretos
+      glUniform3f(colorLoc, 0.0f, 0.0f, 0.0f);
+
+      glDrawArrays(GL_LINES, 0, 6);
+
+      //Linha de ação vermelha
+      glUniform3f(colorLoc, 1.0f, 0.2f, 0.2f);
+
+      glDrawArrays(GL_LINES, 6, 2);
+
+      //Força vermelha
+      glDisable(GL_DEPTH_TEST);
+
+      glUniform3f(colorLoc, 0.75f, 0.0f, 0.0f);
+
+      glDrawArrays(GL_LINES, 8, 6);
+
+      glEnable(GL_DEPTH_TEST);
 
       glfwSwapBuffers(window);
    }
@@ -233,6 +279,16 @@ Vec3 vec3_normalize(Vec3 v) {
         v.x / length,
         v.y / length,
         v.z / length
+   };
+
+   return result;
+}
+
+Vec3 vec3_cross(Vec3 a, Vec3 b) {
+   Vec3 result = {
+      a.y * b.z - a.z * b.y,
+      a.z * b.x - a.x * b.z,
+      a.x * b.y - a.y * b.x
    };
 
    return result;
