@@ -10,6 +10,9 @@
 #include <stdio.h>
 #include <math.h>
 
+#define HEXAGON_RADIUS 2.0f
+#define HEXAGON_POINTS 6
+
 //Criando um struct para vetores
 typedef struct {
    float x;
@@ -23,6 +26,8 @@ Vec3 vec3_scale(Vec3 v, float scalar);
 float vec3_length(Vec3 v);
 Vec3 vec3_normalize(Vec3 v);
 Vec3 vec3_cross(Vec3 a, Vec3 b);
+Vec3 calculate_moment(Vec3 P, Vec3 Q, Vec3 F);
+void add_arrow_vertices(float *vertices, int index, Vec3 start, Vec3 direction, float length, float arrowLength, float arrowWidth);
 
 int main() {
    if (!glfwInit()) {
@@ -105,7 +110,7 @@ int main() {
 
    vec3 cameraPos = {5.0f, 5.0f, 5.0f};
    vec3 cameraTarget = {0.0f, 0.0f, 0.0f};
-   vec3 cameraUp = {0.0f, 1.0f, 0.0f};
+   vec3 cameraUp = {0.0f, 0.0f, 1.0f};
 
    glm_lookat(cameraPos, cameraTarget, cameraUp, view);
 
@@ -119,17 +124,51 @@ int main() {
 
    //Criando o ponto P a força F (valores de teste)
    Vec3 P = {0.5f, 1.5f, 1.0f};
-   Vec3 F = {1.0f, 0.2f, 0.7f};
+   Vec3 F = {0.8f, -0.6f, 1.0f};
+
+   //Ponto onde queremos calcular o momento
+   Vec3 Q = {2.0f, -0.8f, -0.5f};
+
+   //Vetor posição de P até Q
+   Vec3 r = vec3_add(P, vec3_scale(Q, -1.0f));
+
+   //Momento da força em relação a O
+   float momentVertices[HEXAGON_POINTS * 18];
+   int vertexIndex = 0;
+
+   for (int i = 0; i < HEXAGON_POINTS; i++) {
+
+    float angle = 2.0f * M_PI * i / HEXAGON_POINTS;
+
+    Vec3 Q_field = {
+        HEXAGON_RADIUS * cosf(angle),
+        HEXAGON_RADIUS * sinf(angle),
+        0.0f
+    };
+
+    Vec3 M_field = calculate_moment(P, Q_field, F);
+
+    float M_length = vec3_length(M_field);
+
+    if (M_length > 0.001f) {
+
+        float arrowLengthField = 0.25f;
+
+        add_arrow_vertices(momentVertices, vertexIndex, Q_field, M_field, arrowLengthField, 0.06f, 0.025f);
+
+        vertexIndex += 18;
+    }
+}
 
    //Obtendo o versor de F
    Vec3 F_direction = vec3_normalize(F);
 
-   Vec3 reference = {0.0f, 1.0f, 0.0f};
+   Vec3 reference = {0.0f, 0.0f, 1.0f};
    Vec3 arrowSide = vec3_normalize(vec3_cross(F_direction, reference));
 
-   float forceLength = 0.8f;
-   float arrowLength = 0.10f;
-   float arrowWidth = 0.02f;
+   float forceLength = 1.2f;
+   float arrowLength = 0.15f;
+   float arrowWidth = 0.1f;
    
    Vec3 F_end = vec3_add(P, vec3_scale(F_direction, forceLength));
    Vec3 arrowBase = vec3_add(F_end, vec3_scale(F_direction, -arrowLength));
@@ -138,7 +177,7 @@ int main() {
    Vec3 arrowRight = vec3_add(arrowBase, vec3_scale(arrowSide, -arrowWidth));
 
    //Criando os pontos de ação
-   float actionLenght = 4.0f;
+   float actionLenght = 3.0f;
    Vec3 A = vec3_add(P, vec3_scale(F_direction, -actionLenght));
    Vec3 B = vec3_add(P, vec3_scale(F_direction,  actionLenght));
 
@@ -208,6 +247,23 @@ int main() {
 
    glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, (float*)projection);
 
+   //Criando VBO e VAO para os momentos
+   unsigned int momentVBO;
+   unsigned int momentVAO;
+
+   glGenBuffers(1, &momentVBO);
+   glGenVertexArrays(1, &momentVAO);
+
+   glBindVertexArray(momentVAO);
+
+   glBindBuffer(GL_ARRAY_BUFFER, momentVBO);
+
+   glBufferData(GL_ARRAY_BUFFER, sizeof(momentVertices), momentVertices, GL_STATIC_DRAW);
+
+   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+   glEnableVertexAttribArray(0);
+
    //Laço de abertura da janela
    while (!glfwWindowShouldClose(window)) {
       glfwPollEvents();
@@ -225,16 +281,27 @@ int main() {
       glDrawArrays(GL_LINES, 0, 6);
 
       //Linha de ação vermelha
-      glUniform3f(colorLoc, 1.0f, 0.2f, 0.2f);
+      glUniform3f(colorLoc, 1.0f, 0.35f, 0.35f);
 
       glDrawArrays(GL_LINES, 6, 2);
 
       //Força vermelha
       glDisable(GL_DEPTH_TEST);
 
-      glUniform3f(colorLoc, 0.75f, 0.0f, 0.0f);
+      glUniform3f(colorLoc, 0.68f, 0.0f, 0.0f);
 
       glDrawArrays(GL_LINES, 8, 6);
+
+      glEnable(GL_DEPTH_TEST);
+      
+      //Campo de momentos
+      glDisable(GL_DEPTH_TEST);
+
+      glUniform3f(colorLoc, 0.0f, 0.0f, 0.8f);
+
+      glBindVertexArray(momentVAO);
+
+      glDrawArrays(GL_LINES, 0, vertexIndex / 3);
 
       glEnable(GL_DEPTH_TEST);
 
@@ -292,4 +359,67 @@ Vec3 vec3_cross(Vec3 a, Vec3 b) {
    };
 
    return result;
+}
+
+Vec3 calculate_moment(Vec3 P, Vec3 Q, Vec3 F) {
+    Vec3 QP = vec3_add(P, vec3_scale(Q, -1.0f));
+    return vec3_cross(QP, F);
+}
+
+void add_arrow_vertices(float *vertices, int index, Vec3 start, Vec3 direction, float length, float arrowLength, float arrowWidth) {
+    Vec3 dir = vec3_normalize(direction);
+
+    Vec3 reference = {0.0f, 0.0f, 1.0f};
+
+    // Evita produto vetorial nulo caso direction seja paralelo a Z
+    if (fabsf(dir.z) > 0.99f) {
+        reference.x = 1.0f;
+        reference.z = 0.0f;
+    }
+
+    Vec3 arrowSide = vec3_normalize(vec3_cross(dir, reference));
+
+    Vec3 end = vec3_add(start, vec3_scale(dir, length));
+
+    Vec3 base = vec3_add(
+        end,
+        vec3_scale(dir, -arrowLength)
+    );
+
+    Vec3 left = vec3_add(
+        base,
+        vec3_scale(arrowSide, arrowWidth)
+    );
+
+    Vec3 right = vec3_add(
+        base,
+        vec3_scale(arrowSide, -arrowWidth)
+    );
+
+    // Corpo da seta
+    vertices[index++] = start.x;
+    vertices[index++] = start.y;
+    vertices[index++] = start.z;
+
+    vertices[index++] = end.x;
+    vertices[index++] = end.y;
+    vertices[index++] = end.z;
+
+    // Ponta esquerda
+    vertices[index++] = end.x;
+    vertices[index++] = end.y;
+    vertices[index++] = end.z;
+
+    vertices[index++] = left.x;
+    vertices[index++] = left.y;
+    vertices[index++] = left.z;
+
+    // Ponta direita
+    vertices[index++] = end.x;
+    vertices[index++] = end.y;
+    vertices[index++] = end.z;
+
+    vertices[index++] = right.x;
+    vertices[index++] = right.y;
+    vertices[index++] = right.z;
 }
